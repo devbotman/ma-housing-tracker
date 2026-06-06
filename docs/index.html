@@ -107,7 +107,7 @@
   <!-- Hero stats -->
   <div class="hero-stats" id="hero-stats">
     <div class="hstat"><div class="hstat-label">MA Median Home Price</div><div class="hstat-val" id="stat-ma-price">--</div><div class="hstat-sub" id="stat-ma-yoy">--</div></div>
-    <div class="hstat"><div class="hstat-label">vs. National Median</div><div class="hstat-val" id="stat-us-price">--</div><div class="hstat-sub" id="stat-us-yoy">--</div></div>
+    <div class="hstat"><div class="hstat-label">CT Median (Neighbor)</div><div class="hstat-val" id="stat-us-price">--</div><div class="hstat-sub" id="stat-us-yoy">--</div></div>
     <div class="hstat"><div class="hstat-label">30yr Fixed Rate</div><div class="hstat-val" id="stat-30yr">--</div><div class="hstat-sub" id="stat-30yr-date">--</div></div>
     <div class="hstat"><div class="hstat-label">15yr Fixed Rate</div><div class="hstat-val" id="stat-15yr">--</div><div class="hstat-sub" id="stat-15yr-date">--</div></div>
     <div class="hstat"><div class="hstat-label">5/1 ARM Rate</div><div class="hstat-val" id="stat-arm">--</div><div class="hstat-sub" id="stat-arm-date">--</div></div>
@@ -133,7 +133,7 @@
   <div class="tab-pane" id="tab-prices">
     <div class="two-col">
       <div class="card">
-        <div class="card-title">Massachusetts vs. National — Median Price Trend</div>
+        <div class="card-title">MA vs. New England Neighbors — Median Price Trend</div>
         <div class="chart-wrap"><canvas id="chart-state"></canvas></div>
       </div>
       <div class="card">
@@ -201,7 +201,8 @@ let chartMortgage = null, chartState = null, chartCountyBar = null;
 
 const DATA = 'data/';
 const COLORS = { '30yr': '#58a6ff', '15yr': '#3fb950', 'arm': '#d29922' };
-const MA_COLOR = '#58a6ff', US_COLOR = '#8b949e';
+const MA_COLOR = '#58a6ff';
+const STATE_COLORS = { Massachusetts: '#58a6ff', Connecticut: '#3fb950', 'New Hampshire': '#d29922', 'Rhode Island': '#bc8cff', 'New York': '#8b949e', California: '#f85149', Texas: '#e3b341', Florida: '#79c0ff' };
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 async function boot() {
@@ -234,17 +235,17 @@ function populateHero() {
   // MA price
   if (stateData) {
     const maArr = stateData.states['Massachusetts'] || [];
-    const usArr = stateData.states['United States'] || [];
+    const ctArr = stateData.states['Connecticut'] || [];
     if (maArr.length) {
       const latest = maArr[maArr.length - 1];
       setText('stat-ma-price', '$' + fmt(latest.median_price));
       setText('stat-ma-yoy', yoyLabel(latest.yoy_pct) + ' YoY · ' + latest.date);
       colorEl('stat-ma-yoy', latest.yoy_pct);
     }
-    if (usArr.length) {
-      const latest = usArr[usArr.length - 1];
+    if (ctArr.length) {
+      const latest = ctArr[ctArr.length - 1];
       setText('stat-us-price', '$' + fmt(latest.median_price));
-      setText('stat-us-yoy', yoyLabel(latest.yoy_pct) + ' YoY · National');
+      setText('stat-us-yoy', yoyLabel(latest.yoy_pct) + ' YoY · Connecticut');
       colorEl('stat-us-yoy', latest.yoy_pct);
     }
     const updated = stateData.updated || mortgageData?.updated || '';
@@ -286,14 +287,22 @@ function renderMortgage() {
 function renderState() {
   if (!stateData) { return; }
   const maArr = stateData.states['Massachusetts'] || [];
-  const usArr = stateData.states['United States'] || [];
   if (!maArr.length) return;
 
   const labels = maArr.map(d => d.date);
-  const datasets = [
-    { label: 'Massachusetts', data: maArr.map(d => d.median_price), borderColor: MA_COLOR, backgroundColor: 'transparent', tension: 0.3, pointRadius: 2, borderWidth: 2 },
-    { label: 'United States', data: usArr.map(d => d.median_price), borderColor: US_COLOR, backgroundColor: 'transparent', tension: 0.3, pointRadius: 2, borderWidth: 2, borderDash: [4,4] },
-  ];
+  const stateOrder = ['Massachusetts', 'Connecticut', 'New Hampshire', 'Rhode Island', 'New York', 'California', 'Texas', 'Florida'];
+  const datasets = stateOrder
+    .filter(s => stateData.states[s] && stateData.states[s].length)
+    .map((s, i) => ({
+      label: s,
+      data: stateData.states[s].map(d => d.median_price),
+      borderColor: STATE_COLORS[s] || '#8b949e',
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      pointRadius: s === 'Massachusetts' ? 3 : 1,
+      borderWidth: s === 'Massachusetts' ? 2.5 : 1.5,
+      borderDash: s === 'Massachusetts' ? [] : [4, 4],
+    }));
   chartState = mkChart('chart-state', 'line', labels, datasets, { yFmt: v => '$' + fmt(v) });
 }
 

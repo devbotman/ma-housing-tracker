@@ -54,11 +54,12 @@ def export_mortgage_rates(con, days_back: int = 90) -> int:
 
 
 def export_ma_state(con) -> int:
-    """Export MA vs national state-level ZHVI."""
+    """Export MA + comparison states ZHVI trend."""
     cur = con.execute("""
         SELECT state, date, median_price, yoy_pct
         FROM zhvi_state
-        WHERE state IN ('Massachusetts', 'United States')
+        WHERE state IN ('Massachusetts', 'Connecticut', 'New Hampshire', 'Rhode Island',
+                        'New York', 'California', 'Texas', 'Florida')
         ORDER BY state, date ASC
     """)
     rows = cur.fetchall()
@@ -168,17 +169,21 @@ def run(verbose: bool = True):
         return
 
     counts = {}
-    try:
-        counts["mortgage_rates"] = export_mortgage_rates(con)
-        counts["ma_state"]       = export_ma_state(con)
-        counts["ma_counties"]    = export_ma_counties(con)
-        counts["ma_tax"]         = export_ma_tax(con)
-        con.close()
-        if verbose:
-            print(f"  Export complete: {counts}")
-    except Exception as e:
-        print(f"  Export error: {e}")
-        con.close()
+    exporters = [
+        ("mortgage_rates", export_mortgage_rates),
+        ("ma_state",       export_ma_state),
+        ("ma_counties",    export_ma_counties),
+        ("ma_tax",         export_ma_tax),
+    ]
+    for name, fn in exporters:
+        try:
+            counts[name] = fn(con)
+        except Exception as e:
+            print(f"  Export skipped {name}: {e}")
+            counts[name] = 0
+    con.close()
+    if verbose:
+        print(f"  Export complete: {counts}")
 
 
 if __name__ == "__main__":

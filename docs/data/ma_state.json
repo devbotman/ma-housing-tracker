@@ -1,0 +1,181 @@
+{
+  "updated": "2026-06-06",
+  "states": {
+    "California": [
+      {
+        "date": "2026-01-31",
+        "median_price": 777945,
+        "yoy_pct": -1.94
+      },
+      {
+        "date": "2026-02-28",
+        "median_price": 778306,
+        "yoy_pct": -1.72
+      },
+      {
+        "date": "2026-03-31",
+        "median_price": 777598,
+        "yoy_pct": -1.37
+      },
+      {
+        "date": "2026-04-30",
+        "median_price": 776232,
+        "yoy_pct": -1.12
+      }
+    ],
+    "Connecticut": [
+      {
+        "date": "2026-01-31",
+        "median_price": 436311,
+        "yoy_pct": 4.42
+      },
+      {
+        "date": "2026-02-28",
+        "median_price": 438084,
+        "yoy_pct": 4.53
+      },
+      {
+        "date": "2026-03-31",
+        "median_price": 439838,
+        "yoy_pct": 4.7
+      },
+      {
+        "date": "2026-04-30",
+        "median_price": 441466,
+        "yoy_pct": 4.77
+      }
+    ],
+    "Florida": [
+      {
+        "date": "2026-01-31",
+        "median_price": 376604,
+        "yoy_pct": -4.91
+      },
+      {
+        "date": "2026-02-28",
+        "median_price": 376788,
+        "yoy_pct": -4.6
+      },
+      {
+        "date": "2026-03-31",
+        "median_price": 376884,
+        "yoy_pct": -4.16
+      },
+      {
+        "date": "2026-04-30",
+        "median_price": 376504,
+        "yoy_pct": -3.72
+      }
+    ],
+    "Massachusetts": [
+      {
+        "date": "2026-01-31",
+        "median_price": 660009,
+        "yoy_pct": 1.56
+      },
+      {
+        "date": "2026-02-28",
+        "median_price": 661294,
+        "yoy_pct": 1.51
+      },
+      {
+        "date": "2026-03-31",
+        "median_price": 662034,
+        "yoy_pct": 1.58
+      },
+      {
+        "date": "2026-04-30",
+        "median_price": 661754,
+        "yoy_pct": 1.54
+      }
+    ],
+    "New Hampshire": [
+      {
+        "date": "2026-01-31",
+        "median_price": 509569,
+        "yoy_pct": 2.74
+      },
+      {
+        "date": "2026-02-28",
+        "median_price": 510397,
+        "yoy_pct": 2.69
+      },
+      {
+        "date": "2026-03-31",
+        "median_price": 510778,
+        "yoy_pct": 2.74
+      },
+      {
+        "date": "2026-04-30",
+        "median_price": 510708,
+        "yoy_pct": 2.71
+      }
+    ],
+    "New York": [
+      {
+        "date": "2026-01-31",
+        "median_price": 503099,
+        "yoy_pct": 4.22
+      },
+      {
+        "date": "2026-02-28",
+        "median_price": 505478,
+        "yoy_pct": 4.46
+      },
+      {
+        "date": "2026-03-31",
+        "median_price": 508126,
+        "yoy_pct": 4.82
+      },
+      {
+        "date": "2026-04-30",
+        "median_price": 510449,
+        "yoy_pct": 5.0
+      }
+    ],
+    "Rhode Island": [
+      {
+        "date": "2026-01-31",
+        "median_price": 501348,
+        "yoy_pct": 2.75
+      },
+      {
+        "date": "2026-02-28",
+        "median_price": 502968,
+        "yoy_pct": 2.78
+      },
+      {
+        "date": "2026-03-31",
+        "median_price": 504193,
+        "yoy_pct": 2.93
+      },
+      {
+        "date": "2026-04-30",
+        "median_price": 504792,
+        "yoy_pct": 2.95
+      }
+    ],
+    "Texas": [
+      {
+        "date": "2026-01-31",
+        "median_price": 303088,
+        "yoy_pct": -2.38
+      },
+      {
+        "date": "2026-02-28",
+        "median_price": 303068,
+        "yoy_pct": -2.33
+      },
+      {
+        "date": "2026-03-31",
+        "median_price": 302780,
+        "yoy_pct": -2.19
+      },
+      {
+        "date": "2026-04-30",
+        "median_price": 302187,
+        "yoy_pct": -2.04
+      }
+    ]
+  }
+}

@@ -17,7 +17,19 @@ from bs4 import BeautifulSoup
 
 DB_PATH = Path(__file__).parent.parent / "housing.db"
 MA_DOR_URL = "https://www.mass.gov/lists/local-tax-rates-by-town"
-HEADERS = {"User-Agent": "Mozilla/5.0 (research/public-data)"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.mass.gov/",
+}
+
+# Known direct URLs for recent tax rate files (fallback if scraping blocked)
+KNOWN_TAX_URLS = [
+    ("https://www.mass.gov/doc/fy2025-tax-rates/download", 2025),
+    ("https://www.mass.gov/doc/fy2024-tax-rates/download", 2024),
+    ("https://www.mass.gov/doc/fy2023-tax-rates/download", 2023),
+]
 
 
 def get_db():
@@ -42,26 +54,30 @@ def fetch_tax_rates(verbose: bool = True) -> list[dict]:
     """
     rows = []
 
+    # Build candidate file URLs: scrape page first, fall back to known URLs
+    candidates = []
     try:
         r = requests.get(MA_DOR_URL, headers=HEADERS, timeout=20)
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
-
-        # Find links to tax rate files (Excel or CSV)
         links = soup.find_all("a", href=re.compile(r"\.(xlsx|csv|xls)", re.I))
-
-        if not links:
-            if verbose:
-                print("  MA Tax: no data file links found on DOR page — page may have changed")
-            return []
-
-        # Try to get most recent year's file
         for link in links[:3]:
             href = link.get("href", "")
             year_match = re.search(r"(20\d{2})", href)
             year = int(year_match.group(1)) if year_match else 2024
-
             file_url = href if href.startswith("http") else f"https://www.mass.gov{href}"
+            candidates.append((file_url, year))
+    except Exception as e:
+        if verbose:
+            print(f"  MA Tax: page scrape failed ({e}), trying known direct URLs...")
+
+    # Always append known fallback URLs
+    for url, year in KNOWN_TAX_URLS:
+        if not any(u == url for u, _ in candidates):
+            candidates.append((url, year))
+
+    try:
+        for file_url, year in candidates[:3]:
             if verbose:
                 print(f"  MA Tax: downloading {year} rates from {file_url[:60]}...")
 
@@ -71,7 +87,7 @@ def fetch_tax_rates(verbose: bool = True) -> list[dict]:
                 file_r.raise_for_status()
 
                 import io
-                if href.endswith(".csv"):
+                if file_url.endswith(".csv"):
                     df = pd.read_csv(io.BytesIO(file_r.content))
                 else:
                     df = pd.read_excel(io.BytesIO(file_r.content))

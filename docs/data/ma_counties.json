@@ -1,0 +1,397 @@
+{
+  "updated": "2026-06-06",
+  "counties": [
+    {
+      "county": "Nantucket County",
+      "latest_date": "2026-04-30",
+      "median_price": 3105811,
+      "yoy_pct": 5.61,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 3036870,
+          "yoy_pct": 3.68
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 3066388,
+          "yoy_pct": 4.76
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 3091986,
+          "yoy_pct": 5.46
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 3105811,
+          "yoy_pct": 5.61
+        }
+      ]
+    },
+    {
+      "county": "Dukes County",
+      "latest_date": "2026-04-30",
+      "median_price": 1540940,
+      "yoy_pct": 3.0,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 1520173,
+          "yoy_pct": 2.09
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 1533169,
+          "yoy_pct": 2.82
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 1541150,
+          "yoy_pct": 3.1
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 1540940,
+          "yoy_pct": 3.0
+        }
+      ]
+    },
+    {
+      "county": "Middlesex County",
+      "latest_date": "2026-04-30",
+      "median_price": 824308,
+      "yoy_pct": 1.06,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 823589,
+          "yoy_pct": 1.44
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 824694,
+          "yoy_pct": 1.32
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 825282,
+          "yoy_pct": 1.26
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 824308,
+          "yoy_pct": 1.06
+        }
+      ]
+    },
+    {
+      "county": "Norfolk County",
+      "latest_date": "2026-04-30",
+      "median_price": 775861,
+      "yoy_pct": 0.99,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 774884,
+          "yoy_pct": 1.02
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 776139,
+          "yoy_pct": 0.99
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 776541,
+          "yoy_pct": 1.03
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 775861,
+          "yoy_pct": 0.99
+        }
+      ]
+    },
+    {
+      "county": "Suffolk County",
+      "latest_date": "2026-04-30",
+      "median_price": 767235,
+      "yoy_pct": 0.5,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 763777,
+          "yoy_pct": 0.67
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 765677,
+          "yoy_pct": 0.58
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 767797,
+          "yoy_pct": 0.71
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 767235,
+          "yoy_pct": 0.5
+        }
+      ]
+    },
+    {
+      "county": "Barnstable County",
+      "latest_date": "2026-04-30",
+      "median_price": 758833,
+      "yoy_pct": 0.85,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 754657,
+          "yoy_pct": 0.38
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 756681,
+          "yoy_pct": 0.59
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 758408,
+          "yoy_pct": 0.8
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 758833,
+          "yoy_pct": 0.85
+        }
+      ]
+    },
+    {
+      "county": "Essex County",
+      "latest_date": "2026-04-30",
+      "median_price": 722835,
+      "yoy_pct": 1.71,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 722668,
+          "yoy_pct": 2.1
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 723377,
+          "yoy_pct": 1.93
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 723447,
+          "yoy_pct": 1.87
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 722835,
+          "yoy_pct": 1.71
+        }
+      ]
+    },
+    {
+      "county": "Plymouth County",
+      "latest_date": "2026-04-30",
+      "median_price": 646462,
+      "yoy_pct": 3.08,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 642654,
+          "yoy_pct": 2.76
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 644860,
+          "yoy_pct": 2.83
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 646139,
+          "yoy_pct": 3.0
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 646462,
+          "yoy_pct": 3.08
+        }
+      ]
+    },
+    {
+      "county": "Bristol County",
+      "latest_date": "2026-04-30",
+      "median_price": 546009,
+      "yoy_pct": 2.95,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 541292,
+          "yoy_pct": 2.24
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 543411,
+          "yoy_pct": 2.38
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 545050,
+          "yoy_pct": 2.69
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 546009,
+          "yoy_pct": 2.95
+        }
+      ]
+    },
+    {
+      "county": "Worcester County",
+      "latest_date": "2026-04-30",
+      "median_price": 497825,
+      "yoy_pct": 1.37,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 496825,
+          "yoy_pct": 1.49
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 497543,
+          "yoy_pct": 1.32
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 497712,
+          "yoy_pct": 1.31
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 497825,
+          "yoy_pct": 1.37
+        }
+      ]
+    },
+    {
+      "county": "Hampshire County",
+      "latest_date": "2026-04-30",
+      "median_price": 446838,
+      "yoy_pct": 1.18,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 443572,
+          "yoy_pct": 0.49
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 445046,
+          "yoy_pct": 0.54
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 446173,
+          "yoy_pct": 0.87
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 446838,
+          "yoy_pct": 1.18
+        }
+      ]
+    },
+    {
+      "county": "Berkshire County",
+      "latest_date": "2026-04-30",
+      "median_price": 384610,
+      "yoy_pct": 1.97,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 381795,
+          "yoy_pct": 2.12
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 382538,
+          "yoy_pct": 1.82
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 383561,
+          "yoy_pct": 1.83
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 384610,
+          "yoy_pct": 1.97
+        }
+      ]
+    },
+    {
+      "county": "Franklin County",
+      "latest_date": "2026-04-30",
+      "median_price": 365686,
+      "yoy_pct": 0.35,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 360943,
+          "yoy_pct": -0.64
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 362591,
+          "yoy_pct": -0.62
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 364427,
+          "yoy_pct": -0.15
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 365686,
+          "yoy_pct": 0.35
+        }
+      ]
+    },
+    {
+      "county": "Hampden County",
+      "latest_date": "2026-04-30",
+      "median_price": 348273,
+      "yoy_pct": 3.32,
+      "history": [
+        {
+          "date": "2026-01-31",
+          "median_price": 344614,
+          "yoy_pct": 2.53
+        },
+        {
+          "date": "2026-02-28",
+          "median_price": 346383,
+          "yoy_pct": 2.78
+        },
+        {
+          "date": "2026-03-31",
+          "median_price": 347618,
+          "yoy_pct": 3.11
+        },
+        {
+          "date": "2026-04-30",
+          "median_price": 348273,
+          "yoy_pct": 3.32
+        }
+      ]
+    }
+  ]
+}
