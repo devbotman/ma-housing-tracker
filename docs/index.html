@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MA Housing Market Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root {
     --bg:      #0d1117;
@@ -89,6 +91,26 @@
   .empty-sub { font-size: 13px; line-height: 1.6; }
   code { background: var(--border); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
 
+  /* Map */
+  #map { height: 500px; border-radius: 8px; background: #161b22; }
+  .map-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .layer-btn { background: var(--bg); border: 1px solid var(--border); color: var(--muted); border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .layer-btn.active { background: var(--blue); border-color: var(--blue); color: #000; }
+  .layer-btn:hover:not(.active) { border-color: var(--blue); color: var(--blue); }
+  .map-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-left: auto; flex-wrap: nowrap; }
+  .map-legend-bar { width: 120px; height: 10px; border-radius: 4px; }
+  .leaflet-popup-content-wrapper { background: #1c2128 !important; border: 1px solid var(--border) !important; color: var(--text) !important; border-radius: 8px !important; box-shadow: 0 4px 16px rgba(0,0,0,.5) !important; }
+  .leaflet-popup-tip { background: #1c2128 !important; }
+  .leaflet-popup-content { margin: 12px 16px !important; }
+  .map-popup-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; color: var(--blue); }
+  .map-popup-row { display: flex; justify-content: space-between; gap: 24px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .map-popup-row:last-child { border-bottom: none; }
+  .map-popup-label { color: var(--muted); }
+  .map-popup-val { font-weight: 600; color: var(--text); }
+  /* Tile layer attribution dark */
+  .leaflet-control-attribution { background: rgba(13,17,23,.8) !important; color: var(--muted) !important; }
+  .leaflet-control-attribution a { color: var(--blue) !important; }
+
   /* Footer */
   footer { text-align: center; padding: 32px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); margin-top: 40px; }
   footer a { color: var(--blue); text-decoration: none; }
@@ -120,6 +142,7 @@
     <button class="tab active" onclick="switchTab('mortgage')">Mortgage Rates</button>
     <button class="tab" onclick="switchTab('prices')">Home Prices</button>
     <button class="tab" onclick="switchTab('market')">Market Activity</button>
+    <button class="tab" onclick="switchTab('map')">🗺 County Map</button>
     <button class="tab" onclick="switchTab('tax')">Property Taxes</button>
   </div>
 
@@ -208,6 +231,27 @@
     </div>
   </div>
 
+  <!-- Tab: Map -->
+  <div class="tab-pane" id="tab-map">
+    <div class="card">
+      <div class="card-title">MA County Choropleth Map</div>
+      <div class="map-controls">
+        <button class="layer-btn active" onclick="setLayer('median_price')">Median Home Price</button>
+        <button class="layer-btn" onclick="setLayer('inventory')">Active Inventory</button>
+        <button class="layer-btn" onclick="setLayer('new_listings')">New Listings</button>
+        <button class="layer-btn" onclick="setLayer('pct_above_list')">% Above List</button>
+        <button class="layer-btn" onclick="setLayer('median_list_price')">Median List Price</button>
+        <button class="layer-btn" onclick="setLayer('rent_index')">Rent Index</button>
+        <div class="map-legend">
+          <span id="legend-lo">--</span>
+          <canvas class="map-legend-bar" id="legend-bar" width="120" height="10"></canvas>
+          <span id="legend-hi">--</span>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+  </div>
+
   <!-- Tab: Property Taxes -->
   <div class="tab-pane" id="tab-tax">
     <div class="card">
@@ -246,6 +290,7 @@ let countySort = { col: 'median_price', dir: -1 };
 let taxSort    = { col: 'rate', dir: -1 };
 let taxFilter  = '';
 let marketSort = { col: 'inventory', dir: -1 };
+let mapInstance = null, geoLayer = null, geoData = null, activeLayer = 'median_price';
 let chartMortgage = null, chartState = null, chartCountyBar = null;
 let chartInvt = null, chartNewlist = null, chartPctAbove = null, chartMlp = null;
 
@@ -262,6 +307,7 @@ async function boot() {
     fetchJSON('ma_counties.json').then(d => { countyData = d; }),
     fetchJSON('ma_tax.json').then(d => { taxData = d; }),
     fetchJSON('ma_market.json').then(d => { marketData = d; }),
+    fetchJSON('ma_counties_geo.json').then(d => { geoData = d; }),
   ]);
   populateHero();
   renderMortgage();
@@ -507,12 +553,151 @@ function sortMarket(col) {
   renderMarketTable();
 }
 
+// ─── Map ──────────────────────────────────────────────────────────────────────
+const LAYER_CFG = {
+  median_price:      { label: 'Median Home Price',   fmt: v => '$' + fmt(Math.round(v)),      colors: ['#1a3a5c','#1c5998','#2176c8','#58a6ff','#a8d0ff'], unit: '' },
+  inventory:         { label: 'Active Inventory',    fmt: v => v.toLocaleString(undefined,{maximumFractionDigits:0}), colors: ['#0d3320','#1a5c35','#25864d','#3fb950','#90dd98'], unit: '' },
+  new_listings:      { label: 'New Listings',        fmt: v => v.toLocaleString(undefined,{maximumFractionDigits:0}), colors: ['#3a2000','#7a4400','#b86800','#d29922','#f0cc6e'], unit: '' },
+  pct_above_list:    { label: '% Sold Above List',   fmt: v => (v*100).toFixed(1)+'%',       colors: ['#2a0a40','#521680','#7c30b8','#bc8cff','#ddc4ff'], unit: '' },
+  median_list_price: { label: 'Median List Price',   fmt: v => '$' + fmt(Math.round(v)),      colors: ['#001f3a','#003c70','#0060b0','#79c0ff','#c0e4ff'], unit: '' },
+  rent_index:        { label: 'Rent Index (ZORI)',   fmt: v => '$' + fmt(Math.round(v)),      colors: ['#3a0008','#780010','#b80020','#f85149','#ffaa99'], unit: '' },
+};
+
+// Build lookup: county name → all metric values
+function buildCountyLookup() {
+  const lookup = {};
+  // ZHVI county data
+  if (countyData) {
+    countyData.counties.forEach(c => {
+      const name = c.county.replace(' County','').trim();
+      lookup[name] = lookup[name] || {};
+      lookup[name].median_price = c.median_price;
+      lookup[name].yoy_pct      = c.yoy_pct;
+      lookup[name].latest_date  = c.latest_date;
+    });
+  }
+  // Market activity data
+  if (marketData) {
+    marketData.counties.forEach(c => {
+      const name = c.county.replace(' County','').trim();
+      lookup[name] = lookup[name] || {};
+      Object.assign(lookup[name], {
+        inventory:         c.latest?.inventory?.value,
+        new_listings:      c.latest?.new_listings?.value,
+        pct_above_list:    c.latest?.pct_above_list?.value,
+        median_list_price: c.latest?.median_list_price?.value,
+        rent_index:        c.latest?.rent_index?.value,
+      });
+    });
+  }
+  return lookup;
+}
+
+function quantileColor(val, vals, colors) {
+  const sorted = [...vals].filter(v => v != null).sort((a,b) => a-b);
+  if (!sorted.length || val == null) return '#30363d';
+  const pct = sorted.filter(v => v <= val).length / sorted.length;
+  const idx = Math.min(Math.floor(pct * colors.length), colors.length - 1);
+  return colors[idx];
+}
+
+function initMap() {
+  if (mapInstance) return; // already initialized
+  mapInstance = L.map('map', { zoomControl: true, scrollWheelZoom: false })
+    .setView([42.15, -71.55], 8);
+
+  // Dark-friendly tile layer
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+    subdomains: 'abcd', maxZoom: 19
+  }).addTo(mapInstance);
+
+  renderMapLayer(activeLayer);
+}
+
+function renderMapLayer(layerKey) {
+  if (!mapInstance || !geoData) return;
+  const cfg = LAYER_CFG[layerKey];
+  const lookup = buildCountyLookup();
+
+  // Get all values for this layer to compute quantile breaks
+  const allVals = Object.values(lookup).map(d => d[layerKey]).filter(v => v != null);
+  const minVal  = Math.min(...allVals), maxVal = Math.max(...allVals);
+
+  // Remove old layer
+  if (geoLayer) mapInstance.removeLayer(geoLayer);
+
+  geoLayer = L.geoJSON(geoData, {
+    style: feature => {
+      const name = feature.properties.NAME;
+      const val  = lookup[name]?.[layerKey];
+      return {
+        fillColor:   quantileColor(val, allVals, cfg.colors),
+        fillOpacity: 0.82,
+        color:       '#0d1117',
+        weight:      1.5,
+      };
+    },
+    onEachFeature: (feature, layer) => {
+      const name = feature.properties.NAME;
+      const d    = lookup[name] || {};
+
+      layer.on('mouseover', e => {
+        e.target.setStyle({ weight: 3, color: '#58a6ff' });
+        e.target.bringToFront();
+      });
+      layer.on('mouseout', e => geoLayer.resetStyle(e.target));
+      layer.on('click', () => {
+        const rows = [
+          ['Median Home Price',  d.median_price      != null ? '$'+fmt(Math.round(d.median_price))  : '--'],
+          ['YoY Change',         d.yoy_pct           != null ? (d.yoy_pct>=0?'+':'')+d.yoy_pct.toFixed(1)+'%' : '--'],
+          ['Active Inventory',   d.inventory         != null ? Math.round(d.inventory).toLocaleString() : '--'],
+          ['New Listings',       d.new_listings      != null ? Math.round(d.new_listings).toLocaleString() : '--'],
+          ['% Sold Above List',  d.pct_above_list    != null ? (d.pct_above_list*100).toFixed(1)+'%' : '--'],
+          ['Median List Price',  d.median_list_price != null ? '$'+fmt(Math.round(d.median_list_price)) : '--'],
+          ['Rent Index (ZORI)',  d.rent_index        != null ? '$'+fmt(Math.round(d.rent_index)) : '--'],
+        ].map(([label,val]) =>
+          `<div class="map-popup-row"><span class="map-popup-label">${label}</span><span class="map-popup-val">${val}</span></div>`
+        ).join('');
+
+        layer.bindPopup(
+          `<div class="map-popup-title">${name} County</div>${rows}`,
+          { maxWidth: 280 }
+        ).openPopup();
+      });
+    }
+  }).addTo(mapInstance);
+
+  // Update legend
+  updateLegend(cfg, minVal, maxVal);
+}
+
+function updateLegend(cfg, minVal, maxVal) {
+  document.getElementById('legend-lo').textContent = cfg.fmt(minVal);
+  document.getElementById('legend-hi').textContent = cfg.fmt(maxVal);
+  const canvas = document.getElementById('legend-bar');
+  const ctx    = canvas.getContext('2d');
+  const grad   = ctx.createLinearGradient(0, 0, 120, 0);
+  cfg.colors.forEach((c, i) => grad.addColorStop(i / (cfg.colors.length - 1), c));
+  ctx.clearRect(0, 0, 120, 10);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 120, 10);
+}
+
+function setLayer(key) {
+  activeLayer = key;
+  document.querySelectorAll('.layer-btn').forEach(b =>
+    b.classList.toggle('active', b.getAttribute('onclick').includes(`'${key}'`))
+  );
+  renderMapLayer(key);
+}
+
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['mortgage','prices','market','tax'][i] === name));
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['mortgage','prices','market','map','tax'][i] === name));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  // Resize charts after reveal
+  // Resize charts after reveal; init map on first visit
   setTimeout(() => {
     if (chartMortgage)   chartMortgage.resize();
     if (chartState)      chartState.resize();
@@ -521,7 +706,8 @@ function switchTab(name) {
     if (chartNewlist)    chartNewlist.resize();
     if (chartPctAbove)   chartPctAbove.resize();
     if (chartMlp)        chartMlp.resize();
-  }, 50);
+    if (name === 'map') { initMap(); if (mapInstance) mapInstance.invalidateSize(); }
+  }, 80);
 }
 
 // ─── Chart factory ────────────────────────────────────────────────────────────
