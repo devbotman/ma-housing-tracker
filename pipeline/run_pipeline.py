@@ -59,6 +59,13 @@ def main():
         except Exception as e:
             print(f"  Tax error: {e}")
 
+    print("\nStep 4: Exporting to JSON (dashboard)...")
+    try:
+        from export_json import run as run_export
+        run_export()
+    except Exception as e:
+        print(f"  Export error: {e}")
+
     elapsed = time.time() - t0
     print(f"\n{'='*50}")
     print(f"  Pipeline complete — {elapsed:.1f}s")

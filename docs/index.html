@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MA Housing Market Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:      #0d1117;
+    --surface: #161b22;
+    --border:  #30363d;
+    --text:    #e6edf3;
+    --muted:   #8b949e;
+    --blue:    #58a6ff;
+    --green:   #3fb950;
+    --red:     #f85149;
+    --yellow:  #d29922;
+    --purple:  #bc8cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* Nav */
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+  .nav-logo { font-weight: 700; font-size: 16px; color: var(--text); }
+  .nav-logo span { color: var(--blue); }
+  .nav-updated { font-size: 12px; color: var(--muted); }
+  .nav-refresh { background: var(--blue); color: #000; border: none; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .nav-refresh:hover { opacity: 0.85; }
+
+  /* Layout */
+  .page { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+
+  /* Hero stats */
+  .hero-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .hstat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; }
+  .hstat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .hstat-val { font-size: 26px; font-weight: 700; color: var(--text); }
+  .hstat-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .up   { color: var(--red) !important; }
+  .down { color: var(--green) !important; }
+  .neu  { color: var(--muted) !important; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+  .tab { background: none; border: none; padding: 10px 18px; font-size: 14px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 16px; }
+
+  /* Chart wrapper */
+  .chart-wrap { position: relative; height: 300px; }
+
+  /* Two-col layout */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* Tables */
+  .tbl-controls { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; }
+  .search-box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 7px 12px; font-size: 13px; width: 220px; }
+  .search-box::placeholder { color: var(--muted); }
+  .sort-note { font-size: 12px; color: var(--muted); margin-left: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 8px 12px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border); cursor: pointer; white-space: nowrap; user-select: none; }
+  th:hover { color: var(--blue); }
+  th .sort-arrow { opacity: 0.4; margin-left: 4px; }
+  th.sorted .sort-arrow { opacity: 1; color: var(--blue); }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(88,166,255,0.04); }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .pill-up   { background: rgba(248,81,73,0.15); color: var(--red); }
+  .pill-down { background: rgba(63,185,80,0.15); color: var(--green); }
+  .pill-neu  { background: rgba(139,148,158,0.15); color: var(--muted); }
+
+  /* Legend */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+  .empty-sub { font-size: 13px; line-height: 1.6; }
+  code { background: var(--border); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+
+  /* Footer */
+  footer { text-align: center; padding: 32px 16px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); margin-top: 40px; }
+  footer a { color: var(--blue); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">MA <span>Housing</span> Tracker</div>
+  <div class="nav-updated" id="nav-updated"></div>
+  <a href="https://github.com/devbotman/ma-housing-tracker" target="_blank" class="nav-refresh">View on GitHub</a>
+</nav>
+
+<div class="page">
+
+  <!-- Hero stats -->
+  <div class="hero-stats" id="hero-stats">
+    <div class="hstat"><div class="hstat-label">MA Median Home Price</div><div class="hstat-val" id="stat-ma-price">--</div><div class="hstat-sub" id="stat-ma-yoy">--</div></div>
+    <div class="hstat"><div class="hstat-label">vs. National Median</div><div class="hstat-val" id="stat-us-price">--</div><div class="hstat-sub" id="stat-us-yoy">--</div></div>
+    <div class="hstat"><div class="hstat-label">30yr Fixed Rate</div><div class="hstat-val" id="stat-30yr">--</div><div class="hstat-sub" id="stat-30yr-date">--</div></div>
+    <div class="hstat"><div class="hstat-label">15yr Fixed Rate</div><div class="hstat-val" id="stat-15yr">--</div><div class="hstat-sub" id="stat-15yr-date">--</div></div>
+    <div class="hstat"><div class="hstat-label">5/1 ARM Rate</div><div class="hstat-val" id="stat-arm">--</div><div class="hstat-sub" id="stat-arm-date">--</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('mortgage')">Mortgage Rates</button>
+    <button class="tab" onclick="switchTab('prices')">Home Prices</button>
+    <button class="tab" onclick="switchTab('tax')">Property Taxes</button>
+  </div>
+
+  <!-- Tab: Mortgage Rates -->
+  <div class="tab-pane active" id="tab-mortgage">
+    <div class="card">
+      <div class="card-title">30yr Fixed / 15yr Fixed / 5-1 ARM — Last 90 Days</div>
+      <div class="legend" id="mortgage-legend"></div>
+      <div class="chart-wrap"><canvas id="chart-mortgage"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tab: Home Prices -->
+  <div class="tab-pane" id="tab-prices">
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Massachusetts vs. National — Median Price Trend</div>
+        <div class="chart-wrap"><canvas id="chart-state"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">MA Counties — Latest Median Price</div>
+        <div class="chart-wrap"><canvas id="chart-county-bar"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">MA County Detail</div>
+      <div class="tbl-controls">
+        <span class="sort-note">Click column headers to sort</span>
+      </div>
+      <table id="county-table">
+        <thead>
+          <tr>
+            <th onclick="sortCounty('county')">County <span class="sort-arrow">↕</span></th>
+            <th onclick="sortCounty('median_price')" class="sorted">Median Price <span class="sort-arrow">↓</span></th>
+            <th onclick="sortCounty('yoy_pct')">YoY % <span class="sort-arrow">↕</span></th>
+            <th>As of</th>
+          </tr>
+        </thead>
+        <tbody id="county-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tab: Property Taxes -->
+  <div class="tab-pane" id="tab-tax">
+    <div class="card">
+      <div class="card-title">MA Town Residential Property Tax Rates (per $1,000 assessed value)</div>
+      <div class="tbl-controls">
+        <input type="text" class="search-box" id="tax-search" placeholder="Search town..." oninput="filterTax()">
+        <span class="sort-note">Click headers to sort</span>
+      </div>
+      <table id="tax-table">
+        <thead>
+          <tr>
+            <th onclick="sortTax('town')">Town <span class="sort-arrow">↕</span></th>
+            <th onclick="sortTax('year')">Year <span class="sort-arrow">↕</span></th>
+            <th onclick="sortTax('rate')" class="sorted">Rate <span class="sort-arrow">↓</span></th>
+            <th onclick="sortTax('yoy_change')">YoY Change <span class="sort-arrow">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="tax-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Data: <a href="https://fred.stlouisfed.org" target="_blank">FRED (St. Louis Fed)</a> ·
+  <a href="https://www.zillow.com/research/data/" target="_blank">Zillow ZHVI</a> ·
+  <a href="https://www.mass.gov/lists/local-tax-rates-by-town" target="_blank">MA DOR</a> ·
+  <a href="https://github.com/devbotman/ma-housing-tracker" target="_blank">GitHub</a>
+</footer>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let mortgageData = null, stateData = null, countyData = null, taxData = null;
+let countySort = { col: 'median_price', dir: -1 };
+let taxSort    = { col: 'rate', dir: -1 };
+let taxFilter  = '';
+let chartMortgage = null, chartState = null, chartCountyBar = null;
+
+const DATA = 'data/';
+const COLORS = { '30yr': '#58a6ff', '15yr': '#3fb950', 'arm': '#d29922' };
+const MA_COLOR = '#58a6ff', US_COLOR = '#8b949e';
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+async function boot() {
+  await Promise.all([
+    fetchJSON('mortgage_rates.json').then(d => { mortgageData = d; }),
+    fetchJSON('ma_state.json').then(d => { stateData = d; }),
+    fetchJSON('ma_counties.json').then(d => { countyData = d; }),
+    fetchJSON('ma_tax.json').then(d => { taxData = d; }),
+  ]);
+  populateHero();
+  renderMortgage();
+  renderState();
+  renderCountyBar();
+  renderCountyTable();
+  renderTaxTable();
+}
+
+async function fetchJSON(name) {
+  try {
+    const r = await fetch(DATA + name);
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch(e) {
+    return null;
+  }
+}
+
+// ─── Hero stats ───────────────────────────────────────────────────────────────
+function populateHero() {
+  // MA price
+  if (stateData) {
+    const maArr = stateData.states['Massachusetts'] || [];
+    const usArr = stateData.states['United States'] || [];
+    if (maArr.length) {
+      const latest = maArr[maArr.length - 1];
+      setText('stat-ma-price', '$' + fmt(latest.median_price));
+      setText('stat-ma-yoy', yoyLabel(latest.yoy_pct) + ' YoY · ' + latest.date);
+      colorEl('stat-ma-yoy', latest.yoy_pct);
+    }
+    if (usArr.length) {
+      const latest = usArr[usArr.length - 1];
+      setText('stat-us-price', '$' + fmt(latest.median_price));
+      setText('stat-us-yoy', yoyLabel(latest.yoy_pct) + ' YoY · National');
+      colorEl('stat-us-yoy', latest.yoy_pct);
+    }
+    const updated = stateData.updated || mortgageData?.updated || '';
+    if (updated) setText('nav-updated', 'Updated ' + updated);
+  }
+  // Rates
+  if (mortgageData && mortgageData.series.length) {
+    const series = mortgageData.series;
+    const latest = series[series.length - 1];
+    if (latest.rate_30yr_fixed) { setText('stat-30yr', latest.rate_30yr_fixed.toFixed(2) + '%'); setText('stat-30yr-date', latest.date); }
+    if (latest.rate_15yr_fixed) { setText('stat-15yr', latest.rate_15yr_fixed.toFixed(2) + '%'); setText('stat-15yr-date', latest.date); }
+    if (latest.rate_5yr_arm)    { setText('stat-arm',  latest.rate_5yr_arm.toFixed(2)    + '%'); setText('stat-arm-date',  latest.date); }
+  }
+}
+
+// ─── Mortgage chart ───────────────────────────────────────────────────────────
+function renderMortgage() {
+  if (!mortgageData || !mortgageData.series.length) { showEmpty('tab-mortgage', 'No mortgage rate data yet', 'Run the pipeline: <code>python pipeline/run_pipeline.py --fred-only</code>'); return; }
+
+  const series = mortgageData.series;
+  const labels = series.map(d => d.date);
+
+  const datasets = [
+    { label: '30yr Fixed', data: series.map(d => d.rate_30yr_fixed ?? null), borderColor: COLORS['30yr'], backgroundColor: 'transparent', tension: 0.3, pointRadius: 2, borderWidth: 2 },
+    { label: '15yr Fixed', data: series.map(d => d.rate_15yr_fixed ?? null), borderColor: COLORS['15yr'], backgroundColor: 'transparent', tension: 0.3, pointRadius: 2, borderWidth: 2 },
+    { label: '5/1 ARM',    data: series.map(d => d.rate_5yr_arm    ?? null), borderColor: COLORS['arm'],  backgroundColor: 'transparent', tension: 0.3, pointRadius: 2, borderWidth: 2 },
+  ];
+
+  // Legend
+  const leg = document.getElementById('mortgage-legend');
+  datasets.forEach(ds => {
+    leg.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${ds.borderColor}"></div>${ds.label}</div>`;
+  });
+
+  chartMortgage = mkChart('chart-mortgage', 'line', labels, datasets, { yFmt: v => v + '%' });
+}
+
+// ─── State price chart ────────────────────────────────────────────────────────
+function renderState() {
+  if (!stateData) { return; }
+  const maArr = stateData.states['Massachusetts'] || [];
+  const usArr = stateData.states['United States'] || [];
+  if (!maArr.length) return;
+
+  const labels = maArr.map(d => d.date);
+  const datasets = [
+    { label: 'Massachusetts', data: maArr.map(d => d.median_price), borderColor: MA_COLOR, backgroundColor: 'transparent', tension: 0.3, pointRadius: 2, borderWidth: 2 },
+    { label: 'United States', data: usArr.map(d => d.median_price), borderColor: US_COLOR, backgroundColor: 'transparent', tension: 0.3, pointRadius: 2, borderWidth: 2, borderDash: [4,4] },
+  ];
+  chartState = mkChart('chart-state', 'line', labels, datasets, { yFmt: v => '$' + fmt(v) });
+}
+
+// ─── County bar chart ─────────────────────────────────────────────────────────
+function renderCountyBar() {
+  if (!countyData || !countyData.counties.length) return;
+  const counties = countyData.counties;
+  const labels   = counties.map(c => c.county.replace(' County', ''));
+  const prices   = counties.map(c => c.median_price);
+  const colors   = prices.map(p => p > 700000 ? '#f85149' : p > 500000 ? '#d29922' : '#3fb950');
+
+  chartCountyBar = mkChart('chart-county-bar', 'bar', labels, [
+    { label: 'Median Price', data: prices, backgroundColor: colors, borderRadius: 4 }
+  ], { yFmt: v => '$' + fmt(v), indexAxis: 'y' });
+}
+
+// ─── County table ─────────────────────────────────────────────────────────────
+function renderCountyTable() {
+  if (!countyData || !countyData.counties.length) return;
+  let rows = [...countyData.counties];
+  rows.sort((a, b) => countySort.dir * ((a[countySort.col] ?? 0) > (b[countySort.col] ?? 0) ? 1 : -1));
+
+  document.getElementById('county-tbody').innerHTML = rows.map(c => `
+    <tr>
+      <td>${c.county}</td>
+      <td><strong>$${fmt(c.median_price)}</strong></td>
+      <td>${yoyPill(c.yoy_pct)}</td>
+      <td style="color:var(--muted)">${c.latest_date}</td>
+    </tr>`).join('');
+}
+
+function sortCounty(col) {
+  if (countySort.col === col) countySort.dir *= -1;
+  else { countySort.col = col; countySort.dir = -1; }
+  updateSortHeaders('county-table', col);
+  renderCountyTable();
+}
+
+// ─── Tax table ────────────────────────────────────────────────────────────────
+function renderTaxTable() {
+  if (!taxData || !taxData.towns.length) { showEmpty('tab-tax', 'No property tax data yet', 'Run the pipeline: <code>python pipeline/run_pipeline.py --tax-only</code>'); return; }
+
+  let rows = taxData.towns.filter(t => !taxFilter || t.town.toLowerCase().includes(taxFilter));
+  rows.sort((a, b) => {
+    const av = a[taxSort.col] ?? 0, bv = b[taxSort.col] ?? 0;
+    return taxSort.dir * (av > bv ? 1 : av < bv ? -1 : 0);
+  });
+
+  document.getElementById('tax-tbody').innerHTML = rows.map(t => `
+    <tr>
+      <td>${t.town}</td>
+      <td style="color:var(--muted)">${t.year}</td>
+      <td><strong>$${t.rate ? t.rate.toFixed(2) : '--'}</strong></td>
+      <td>${t.yoy_change != null ? yoyPill(t.yoy_change, true) : '<span style="color:var(--muted)">--</span>'}</td>
+    </tr>`).join('');
+}
+
+function sortTax(col) {
+  if (taxSort.col === col) taxSort.dir *= -1;
+  else { taxSort.col = col; taxSort.dir = col === 'town' ? 1 : -1; }
+  updateSortHeaders('tax-table', col);
+  renderTaxTable();
+}
+
+function filterTax() {
+  taxFilter = document.getElementById('tax-search').value.trim().toLowerCase();
+  renderTaxTable();
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['mortgage','prices','tax'][i] === name));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  // Resize charts after reveal
+  setTimeout(() => {
+    if (chartMortgage)   chartMortgage.resize();
+    if (chartState)      chartState.resize();
+    if (chartCountyBar)  chartCountyBar.resize();
+  }, 50);
+}
+
+// ─── Chart factory ────────────────────────────────────────────────────────────
+function mkChart(id, type, labels, datasets, opts = {}) {
+  const ctx = document.getElementById(id).getContext('2d');
+  return new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: opts.indexAxis || 'x',
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1c2128',
+          borderColor: '#30363d',
+          borderWidth: 1,
+          titleColor: '#8b949e',
+          bodyColor: '#e6edf3',
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed[opts.indexAxis === 'y' ? 'x' : 'y'];
+              return ` ${ctx.dataset.label}: ${opts.yFmt ? opts.yFmt(v) : v}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#8b949e', maxTicksLimit: 8, font: { size: 11 } }, grid: { color: '#21262d' } },
+        y: { ticks: { color: '#8b949e', font: { size: 11 }, callback: v => opts.yFmt ? opts.yFmt(v) : v }, grid: { color: '#21262d' } },
+      }
+    }
+  });
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function fmt(n) { return n ? n.toLocaleString() : '--'; }
+
+function yoyLabel(v) {
+  if (v == null) return '--';
+  return (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+}
+
+function yoyPill(v, isTax = false) {
+  if (v == null) return '<span style="color:var(--muted)">--</span>';
+  // For tax: increase is bad (red), decrease is good (green)
+  // For prices: increase is up (red pill), decrease is down (green pill)
+  const cls = v > 0.05 ? 'pill-up' : v < -0.05 ? 'pill-down' : 'pill-neu';
+  const sign = v >= 0 ? '+' : '';
+  const suffix = isTax ? '' : '%';
+  return `<span class="pill ${cls}">${sign}${v.toFixed(2)}${suffix}</span>`;
+}
+
+function colorEl(id, v) {
+  if (v == null) return;
+  const el = document.getElementById(id);
+  el.classList.toggle('up', v > 0);
+  el.classList.toggle('down', v < 0);
+}
+
+function setText(id, txt) { const el = document.getElementById(id); if (el) el.textContent = txt; }
+
+function updateSortHeaders(tableId, activeCol) {
+  document.querySelectorAll(`#${tableId} th`).forEach(th => {
+    const isSorted = th.onclick?.toString().includes(`'${activeCol}'`);
+    th.classList.toggle('sorted', isSorted);
+  });
+}
+
+function showEmpty(tabId, title, sub) {
+  const pane = document.getElementById(tabId);
+  pane.innerHTML = `<div class="empty"><div class="empty-title">${title}</div><div class="empty-sub">${sub}</div></div>`;
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+boot();
+</script>
+</body>
+</html>

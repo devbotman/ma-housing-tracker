@@ -6,3 +6,5 @@ __pycache__/
 .env
 .env.*
 .DS_Store
+# Keep docs/data/ JSON files tracked (they're the static dashboard data)
+!docs/data/*.json
