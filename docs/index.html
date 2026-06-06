@@ -238,8 +238,17 @@
   <!-- Tab: Map -->
   <div class="tab-pane" id="tab-map">
     <div class="card">
-      <div class="card-title">MA County Choropleth Map</div>
-      <div class="map-controls">
+      <div class="card-title">MA Housing Heat Map</div>
+
+      <!-- Geo toggle -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <span style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;">View:</span>
+        <button class="layer-btn active" id="geo-county" onclick="setGeo('county')">County</button>
+        <button class="layer-btn"        id="geo-town"   onclick="setGeo('town')">Town</button>
+      </div>
+
+      <!-- County metric buttons -->
+      <div class="map-controls" id="county-layers">
         <button class="layer-btn active" onclick="setLayer('median_price')">Median Home Price</button>
         <button class="layer-btn" onclick="setLayer('inventory')">Active Inventory</button>
         <button class="layer-btn" onclick="setLayer('new_listings')">New Listings</button>
@@ -252,6 +261,18 @@
           <span id="legend-hi">--</span>
         </div>
       </div>
+
+      <!-- Town metric buttons -->
+      <div class="map-controls" id="town-layers" style="display:none;">
+        <button class="layer-btn active" onclick="setTownLayer('rate')">Tax Rate (per $1,000)</button>
+        <button class="layer-btn" onclick="setTownLayer('yoy_change')">YoY Tax Change</button>
+        <div class="map-legend">
+          <span id="legend-town-lo">--</span>
+          <canvas class="map-legend-bar" id="legend-town-bar" width="120" height="10"></canvas>
+          <span id="legend-town-hi">--</span>
+        </div>
+      </div>
+
       <div id="map"></div>
     </div>
   </div>
@@ -295,6 +316,7 @@ let taxSort    = { col: 'rate', dir: -1 };
 let taxFilter  = '';
 let marketSort = { col: 'inventory', dir: -1 };
 let mapInstance = null, geoLayer = null, geoData = null, activeLayer = 'median_price';
+let townGeoData = null, activeTownLayer = 'rate', activeGeo = 'county';
 let chartMortgage = null, chartState = null, chartCountyBar = null;
 let chartInvt = null, chartNewlist = null, chartPctAbove = null, chartMlp = null;
 
@@ -312,6 +334,7 @@ async function boot() {
     fetchJSON('ma_tax.json').then(d => { taxData = d; }),
     fetchJSON('ma_market.json').then(d => { marketData = d; }),
     fetchJSON('ma_counties_geo.json').then(d => { geoData = d; }),
+    fetchJSON('ma_towns_geo.json').then(d => { townGeoData = d; }),
   ]);
   populateHero();
   renderMortgage();
@@ -756,12 +779,122 @@ function updateLegend(cfg, minVal, maxVal) {
 
 function setLayer(key) {
   activeLayer = key;
-  // Remove old labels before re-rendering
   if (mapInstance) mapInstance.eachLayer(l => { if (l instanceof L.Marker) mapInstance.removeLayer(l); });
-  document.querySelectorAll('.layer-btn').forEach(b =>
+  document.querySelectorAll('#county-layers .layer-btn').forEach(b =>
     b.classList.toggle('active', b.getAttribute('onclick').includes(`'${key}'`))
   );
   renderMapLayer(key);
+}
+
+// ─── Town heat map ────────────────────────────────────────────────────────────
+const TOWN_LAYER_CFG = {
+  rate:       { label: 'Tax Rate (per $1,000)', fmt: v => '$' + v.toFixed(2) },
+  yoy_change: { label: 'YoY Tax Change',        fmt: v => (v >= 0 ? '+' : '') + v.toFixed(2) },
+};
+
+function buildTownLookup() {
+  if (!taxData) return {};
+  const lookup = {};
+  taxData.towns.forEach(t => {
+    lookup[t.town] = { rate: t.rate, yoy_change: t.yoy_change, year: t.year };
+  });
+  return lookup;
+}
+
+function renderTownHeat(layerKey) {
+  if (!mapInstance || !townGeoData) return;
+  const cfg    = TOWN_LAYER_CFG[layerKey];
+  const lookup = buildTownLookup();
+
+  const allVals = Object.values(lookup).map(d => d[layerKey]).filter(v => v != null);
+  const minVal  = Math.min(...allVals), maxVal = Math.max(...allVals);
+  const range   = maxVal - minVal || 1;
+
+  if (heatLayer)   { mapInstance.removeLayer(heatLayer);   heatLayer = null; }
+  if (borderLayer) { mapInstance.removeLayer(borderLayer); borderLayer = null; }
+  if (mapInstance) mapInstance.eachLayer(l => { if (l instanceof L.Marker) mapInstance.removeLayer(l); });
+
+  const heatPts = [];
+  townGeoData.features.forEach(feature => {
+    const name = feature.properties.name;
+    const d    = lookup[name];
+    const val  = d?.[layerKey];
+    if (val == null) return;
+    const intensity = (val - minVal) / range;
+    const nPts = Math.max(4, Math.round(intensity * 14));
+    scatterPoints(feature, nPts).forEach(([lat, lng]) => {
+      heatPts.push([lat, lng, intensity]);
+    });
+  });
+
+  // For tax rate: green (low) → red (high); for yoy: blue (decrease) → red (increase)
+  const gradient = layerKey === 'yoy_change'
+    ? { 0.0: '#0d1117', 0.3: '#1a5c98', 0.5: '#d29922', 0.75: '#f85149', 1.0: '#ff9999' }
+    : { 0.0: '#0d1117', 0.3: '#25864d', 0.6: '#d29922', 0.85: '#f85149', 1.0: '#ff9999' };
+
+  heatLayer = L.heatLayer(heatPts, {
+    radius: 30, blur: 22, maxZoom: 12, max: 1.0, gradient
+  }).addTo(mapInstance);
+
+  borderLayer = L.geoJSON(townGeoData, {
+    style: { fillColor: 'transparent', fillOpacity: 0, color: 'rgba(255,255,255,0.12)', weight: 0.6 },
+    onEachFeature: (feature, layer) => {
+      const name = feature.properties.name;
+      const d    = lookup[name] || {};
+      layer.on('mouseover', e => e.target.setStyle({ color: 'rgba(88,166,255,0.9)', weight: 1.5 }));
+      layer.on('mouseout',  e => e.target.setStyle({ color: 'rgba(255,255,255,0.12)', weight: 0.6 }));
+      layer.on('click', () => {
+        const rows = [
+          ['Town',           name],
+          ['Tax Rate',       d.rate       != null ? '$' + d.rate.toFixed(2) + ' / $1k' : '--'],
+          ['YoY Change',     d.yoy_change != null ? (d.yoy_change>=0?'+':'') + d.yoy_change.toFixed(2) : '--'],
+          ['Year',           d.year       || '--'],
+          ['County',         feature.properties.county || '--'],
+        ].map(([lbl,val]) =>
+          `<div class="map-popup-row"><span class="map-popup-label">${lbl}</span><span class="map-popup-val">${val}</span></div>`
+        ).join('');
+        layer.bindPopup(`<div class="map-popup-title">${name}</div>${rows}`, { maxWidth: 240 }).openPopup();
+      });
+    }
+  }).addTo(mapInstance);
+
+  // Update legend
+  const lo = cfg.fmt(minVal), hi = cfg.fmt(maxVal);
+  document.getElementById('legend-town-lo').textContent = lo;
+  document.getElementById('legend-town-hi').textContent = hi;
+  const canvas = document.getElementById('legend-town-bar');
+  const ctx = canvas.getContext('2d');
+  const stops = layerKey === 'yoy_change'
+    ? ['#1a5c98','#d29922','#f85149']
+    : ['#25864d','#d29922','#f85149'];
+  const grad = ctx.createLinearGradient(0,0,120,0);
+  stops.forEach((c,i) => grad.addColorStop(i/(stops.length-1), c));
+  ctx.clearRect(0,0,120,10); ctx.fillStyle = grad; ctx.fillRect(0,0,120,10);
+}
+
+function setTownLayer(key) {
+  activeTownLayer = key;
+  document.querySelectorAll('#town-layers .layer-btn').forEach(b =>
+    b.classList.toggle('active', b.getAttribute('onclick').includes(`'${key}'`))
+  );
+  renderTownHeat(key);
+}
+
+function setGeo(geo) {
+  activeGeo = geo;
+  document.getElementById('geo-county').classList.toggle('active', geo === 'county');
+  document.getElementById('geo-town').classList.toggle('active',   geo === 'town');
+  document.getElementById('county-layers').style.display = geo === 'county' ? '' : 'none';
+  document.getElementById('town-layers').style.display   = geo === 'town'   ? '' : 'none';
+
+  if (!mapInstance) return;
+  // Clear all layers except tile
+  if (heatLayer)   { mapInstance.removeLayer(heatLayer);   heatLayer = null; }
+  if (borderLayer) { mapInstance.removeLayer(borderLayer); borderLayer = null; }
+  mapInstance.eachLayer(l => { if (l instanceof L.Marker) mapInstance.removeLayer(l); });
+
+  if (geo === 'county') renderMapLayer(activeLayer);
+  else                  renderTownHeat(activeTownLayer);
 }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
