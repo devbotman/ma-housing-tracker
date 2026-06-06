@@ -59,6 +59,14 @@ def main():
         except Exception as e:
             print(f"  Tax error: {e}")
 
+    if run_all or args.zillow_only:
+        print("\nStep 3b: Market activity (Zillow extended)...")
+        try:
+            from fetch_zillow_market import run as run_market
+            run_market()
+        except Exception as e:
+            print(f"  Market error: {e}")
+
     print("\nStep 4: Exporting to JSON (dashboard)...")
     try:
         from export_json import run as run_export

@@ -111,12 +111,15 @@
     <div class="hstat"><div class="hstat-label">30yr Fixed Rate</div><div class="hstat-val" id="stat-30yr">--</div><div class="hstat-sub" id="stat-30yr-date">--</div></div>
     <div class="hstat"><div class="hstat-label">15yr Fixed Rate</div><div class="hstat-val" id="stat-15yr">--</div><div class="hstat-sub" id="stat-15yr-date">--</div></div>
     <div class="hstat"><div class="hstat-label">5/1 ARM Rate</div><div class="hstat-val" id="stat-arm">--</div><div class="hstat-sub" id="stat-arm-date">--</div></div>
+    <div class="hstat"><div class="hstat-label">MA For-Sale Inventory</div><div class="hstat-val" id="stat-invt">--</div><div class="hstat-sub" id="stat-invt-date">--</div></div>
+    <div class="hstat"><div class="hstat-label">% Sold Above List</div><div class="hstat-val" id="stat-pct-above">--</div><div class="hstat-sub" id="stat-pct-above-date">--</div></div>
   </div>
 
   <!-- Tabs -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('mortgage')">Mortgage Rates</button>
     <button class="tab" onclick="switchTab('prices')">Home Prices</button>
+    <button class="tab" onclick="switchTab('market')">Market Activity</button>
     <button class="tab" onclick="switchTab('tax')">Property Taxes</button>
   </div>
 
@@ -160,6 +163,51 @@
     </div>
   </div>
 
+  <!-- Tab: Market Activity -->
+  <div class="tab-pane" id="tab-market">
+    <!-- State-level trend charts -->
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">MA For-Sale Inventory — Monthly</div>
+        <div class="chart-wrap"><canvas id="chart-invt"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">MA New Listings — Monthly</div>
+        <div class="chart-wrap"><canvas id="chart-newlist"></canvas></div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">% Sold Above List Price — MA State</div>
+        <div class="chart-wrap"><canvas id="chart-pct-above"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">MA Median List Price — Monthly</div>
+        <div class="chart-wrap"><canvas id="chart-mlp"></canvas></div>
+      </div>
+    </div>
+    <!-- County snapshot table -->
+    <div class="card">
+      <div class="card-title">MA County Market Snapshot — Latest Month</div>
+      <div class="tbl-controls">
+        <span class="sort-note">Click headers to sort</span>
+      </div>
+      <table id="market-table">
+        <thead>
+          <tr>
+            <th onclick="sortMarket('county')">County <span class="sort-arrow">↕</span></th>
+            <th onclick="sortMarket('inventory')" class="sorted">Inventory <span class="sort-arrow">↓</span></th>
+            <th onclick="sortMarket('new_listings')">New Listings <span class="sort-arrow">↕</span></th>
+            <th onclick="sortMarket('pct_above_list')">% Above List <span class="sort-arrow">↕</span></th>
+            <th onclick="sortMarket('median_list_price')">Median List <span class="sort-arrow">↕</span></th>
+            <th onclick="sortMarket('rent_index')">Rent Index <span class="sort-arrow">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="market-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- Tab: Property Taxes -->
   <div class="tab-pane" id="tab-tax">
     <div class="card">
@@ -186,18 +234,20 @@
 
 <footer>
   Data: <a href="https://fred.stlouisfed.org" target="_blank">FRED (St. Louis Fed)</a> ·
-  <a href="https://www.zillow.com/research/data/" target="_blank">Zillow ZHVI</a> ·
-  <a href="https://www.mass.gov/lists/local-tax-rates-by-town" target="_blank">MA DOR</a> ·
+  <a href="https://www.zillow.com/research/data/" target="_blank">Zillow Research</a> ·
+  <a href="https://dls-gw.dor.state.ma.us/reports/" target="_blank">MA DOR</a> ·
   <a href="https://github.com/devbotman/ma-housing-tracker" target="_blank">GitHub</a>
 </footer>
 
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────
-let mortgageData = null, stateData = null, countyData = null, taxData = null;
+let mortgageData = null, stateData = null, countyData = null, taxData = null, marketData = null;
 let countySort = { col: 'median_price', dir: -1 };
 let taxSort    = { col: 'rate', dir: -1 };
 let taxFilter  = '';
+let marketSort = { col: 'inventory', dir: -1 };
 let chartMortgage = null, chartState = null, chartCountyBar = null;
+let chartInvt = null, chartNewlist = null, chartPctAbove = null, chartMlp = null;
 
 const DATA = 'data/';
 const COLORS = { '30yr': '#58a6ff', '15yr': '#3fb950', 'arm': '#d29922' };
@@ -211,6 +261,7 @@ async function boot() {
     fetchJSON('ma_state.json').then(d => { stateData = d; }),
     fetchJSON('ma_counties.json').then(d => { countyData = d; }),
     fetchJSON('ma_tax.json').then(d => { taxData = d; }),
+    fetchJSON('ma_market.json').then(d => { marketData = d; }),
   ]);
   populateHero();
   renderMortgage();
@@ -218,6 +269,8 @@ async function boot() {
   renderCountyBar();
   renderCountyTable();
   renderTaxTable();
+  renderMarketCharts();
+  renderMarketTable();
 }
 
 async function fetchJSON(name) {
@@ -258,6 +311,16 @@ function populateHero() {
     if (latest.rate_30yr_fixed) { setText('stat-30yr', latest.rate_30yr_fixed.toFixed(2) + '%'); setText('stat-30yr-date', latest.date); }
     if (latest.rate_15yr_fixed) { setText('stat-15yr', latest.rate_15yr_fixed.toFixed(2) + '%'); setText('stat-15yr-date', latest.date); }
     if (latest.rate_5yr_arm)    { setText('stat-arm',  latest.rate_5yr_arm.toFixed(2)    + '%'); setText('stat-arm-date',  latest.date); }
+  }
+  // Market stats
+  if (marketData && marketData.state.length) {
+    const sl = marketData.state;
+    // Find last available value for each metric (they may not all share the same latest date)
+    const lastWith = (key) => [...sl].reverse().find(d => d[key] != null);
+    const li = lastWith('inventory');
+    const lp = lastWith('pct_above_list');
+    if (li) { setText('stat-invt', li.inventory.toLocaleString(undefined, {maximumFractionDigits: 0})); setText('stat-invt-date', li.date); }
+    if (lp) { setText('stat-pct-above', (lp.pct_above_list * 100).toFixed(1) + '%'); setText('stat-pct-above-date', lp.date); }
   }
 }
 
@@ -372,9 +435,81 @@ function filterTax() {
   renderTaxTable();
 }
 
+// ─── Market Activity charts ───────────────────────────────────────────────────
+function renderMarketCharts() {
+  if (!marketData) return;
+  const state = marketData.state || [];
+  if (!state.length) return;
+
+  // Helper: extract series from state array, keep last 36 months
+  const last36 = arr => arr.slice(-36);
+  const sl = last36(state);
+  const labels = sl.map(d => d.date);
+
+  const lineOpts = (color) => ({
+    borderColor: color, backgroundColor: 'transparent',
+    tension: 0.3, pointRadius: 2, borderWidth: 2
+  });
+
+  if (sl.some(d => d.inventory != null)) {
+    chartInvt = mkChart('chart-invt', 'line', labels,
+      [{ label: 'For-Sale Listings', data: sl.map(d => d.inventory ?? null), ...lineOpts('#58a6ff') }],
+      { yFmt: v => v.toLocaleString() });
+  }
+  if (sl.some(d => d.new_listings != null)) {
+    chartNewlist = mkChart('chart-newlist', 'line', labels,
+      [{ label: 'New Listings', data: sl.map(d => d.new_listings ?? null), ...lineOpts('#3fb950') }],
+      { yFmt: v => v.toLocaleString() });
+  }
+  if (sl.some(d => d.pct_above_list != null)) {
+    chartPctAbove = mkChart('chart-pct-above', 'line', labels,
+      [{ label: '% Sold Above List', data: sl.map(d => d.pct_above_list != null ? +(d.pct_above_list * 100).toFixed(1) : null), ...lineOpts('#d29922') }],
+      { yFmt: v => v + '%' });
+  }
+  if (sl.some(d => d.median_list_price != null)) {
+    chartMlp = mkChart('chart-mlp', 'line', labels,
+      [{ label: 'Median List Price', data: sl.map(d => d.median_list_price ?? null), ...lineOpts('#bc8cff') }],
+      { yFmt: v => '$' + fmt(v) });
+  }
+}
+
+function renderMarketTable() {
+  if (!marketData || !marketData.counties.length) return;
+  const rows = marketData.counties.map(c => ({
+    county:            c.county,
+    inventory:         c.latest?.inventory?.value,
+    new_listings:      c.latest?.new_listings?.value,
+    pct_above_list:    c.latest?.pct_above_list?.value,
+    median_list_price: c.latest?.median_list_price?.value,
+    rent_index:        c.latest?.rent_index?.value,
+  }));
+
+  rows.sort((a, b) => {
+    const av = a[marketSort.col] ?? -Infinity, bv = b[marketSort.col] ?? -Infinity;
+    return marketSort.dir * (av > bv ? 1 : av < bv ? -1 : 0);
+  });
+
+  document.getElementById('market-tbody').innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.county}</td>
+      <td>${r.inventory != null ? r.inventory.toLocaleString(undefined, {maximumFractionDigits: 0}) : '<span style="color:var(--muted)">--</span>'}</td>
+      <td>${r.new_listings != null ? r.new_listings.toLocaleString(undefined, {maximumFractionDigits: 0}) : '<span style="color:var(--muted)">--</span>'}</td>
+      <td>${r.pct_above_list != null ? (r.pct_above_list * 100).toFixed(1) + '%' : '<span style="color:var(--muted)">--</span>'}</td>
+      <td>${r.median_list_price != null ? '$' + fmt(r.median_list_price) : '<span style="color:var(--muted)">--</span>'}</td>
+      <td>${r.rent_index != null ? '$' + fmt(Math.round(r.rent_index)) : '<span style="color:var(--muted)">--</span>'}</td>
+    </tr>`).join('');
+}
+
+function sortMarket(col) {
+  if (marketSort.col === col) marketSort.dir *= -1;
+  else { marketSort.col = col; marketSort.dir = col === 'county' ? 1 : -1; }
+  updateSortHeaders('market-table', col);
+  renderMarketTable();
+}
+
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['mortgage','prices','tax'][i] === name));
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['mortgage','prices','market','tax'][i] === name));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   // Resize charts after reveal
@@ -382,6 +517,10 @@ function switchTab(name) {
     if (chartMortgage)   chartMortgage.resize();
     if (chartState)      chartState.resize();
     if (chartCountyBar)  chartCountyBar.resize();
+    if (chartInvt)       chartInvt.resize();
+    if (chartNewlist)    chartNewlist.resize();
+    if (chartPctAbove)   chartPctAbove.resize();
+    if (chartMlp)        chartMlp.resize();
   }, 50);
 }
 

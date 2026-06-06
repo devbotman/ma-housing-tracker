@@ -153,6 +153,79 @@ def export_ma_tax(con) -> int:
     return len(towns)
 
 
+def export_ma_market(con) -> int:
+    """Export MA market activity (inventory, new listings, % above list, median list price, rent)."""
+    # County-level datasets: latest value + 24-month history per county
+    county_datasets = {
+        "inventory":        "market_invt_county",
+        "new_listings":     "market_newlist_county",
+        "pct_above_list":   "market_pct_above_county",
+        "median_list_price":"market_mlp_county",
+        "rent_index":       "market_zori_county",
+    }
+    # State-level time series
+    state_datasets = {
+        "inventory":        "market_invt_state",
+        "new_listings":     "market_newlist_state",
+        "pct_above_list":   "market_pct_above_state",
+        "median_list_price":"market_mlp_state",
+    }
+
+    # Build county snapshots
+    counties = {}
+    for metric, table in county_datasets.items():
+        try:
+            cur = con.execute(f"""
+                SELECT county, date, {metric}
+                FROM {table}
+                WHERE state = 'MA'
+                ORDER BY county, date ASC
+            """)
+            for county, date, val in cur.fetchall():
+                if county not in counties:
+                    counties[county] = {"county": county, "history": {}}
+                if metric not in counties[county]["history"]:
+                    counties[county]["history"][metric] = []
+                counties[county]["history"][metric].append({"date": date, "value": val})
+        except Exception:
+            pass  # table may not exist yet
+
+    # Compute latest values per county per metric
+    county_list = []
+    for county, data in sorted(counties.items()):
+        entry = {"county": county, "latest": {}, "history": data["history"]}
+        for metric, series in data["history"].items():
+            if series:
+                entry["latest"][metric] = series[-1]
+        county_list.append(entry)
+
+    # Build state time series (all metrics on same date axis)
+    state_series = {}
+    for metric, table in state_datasets.items():
+        try:
+            cur = con.execute(f"""
+                SELECT date, {metric} FROM {table}
+                WHERE state = 'Massachusetts'
+                ORDER BY date ASC
+            """)
+            for date, val in cur.fetchall():
+                if date not in state_series:
+                    state_series[date] = {"date": date}
+                state_series[date][metric] = val
+        except Exception:
+            pass
+
+    state_list = sorted(state_series.values(), key=lambda x: x["date"])
+
+    out = {
+        "updated":  datetime.now().strftime("%Y-%m-%d"),
+        "counties": county_list,
+        "state":    state_list,
+    }
+    _write("ma_market.json", out)
+    return len(county_list)
+
+
 def _write(filename: str, data: dict):
     path = OUT_DIR / filename
     path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
@@ -174,6 +247,7 @@ def run(verbose: bool = True):
         ("ma_state",       export_ma_state),
         ("ma_counties",    export_ma_counties),
         ("ma_tax",         export_ma_tax),
+        ("ma_market",      export_ma_market),
     ]
     for name, fn in exporters:
         try:
