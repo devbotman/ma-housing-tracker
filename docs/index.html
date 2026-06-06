@@ -7,6 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <style>
   :root {
     --bg:      #0d1117;
@@ -119,7 +120,10 @@
 <body>
 
 <nav>
-  <div class="nav-logo">MA <span>Housing</span> Tracker</div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <a href="https://devbotman.github.io/" style="font-size:12px;color:var(--muted);text-decoration:none;display:flex;align-items:center;gap:4px;" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--muted)'">← Portfolio</a>
+    <div class="nav-logo">MA <span>Housing</span> Tracker</div>
+  </div>
   <div class="nav-updated" id="nav-updated"></div>
   <a href="https://github.com/devbotman/ma-housing-tracker" target="_blank" class="nav-refresh">View on GitHub</a>
 </nav>
@@ -553,20 +557,52 @@ function sortMarket(col) {
   renderMarketTable();
 }
 
-// ─── Map ──────────────────────────────────────────────────────────────────────
+// ─── Map (heat map) ───────────────────────────────────────────────────────────
 const LAYER_CFG = {
-  median_price:      { label: 'Median Home Price',   fmt: v => '$' + fmt(Math.round(v)),      colors: ['#1a3a5c','#1c5998','#2176c8','#58a6ff','#a8d0ff'], unit: '' },
-  inventory:         { label: 'Active Inventory',    fmt: v => v.toLocaleString(undefined,{maximumFractionDigits:0}), colors: ['#0d3320','#1a5c35','#25864d','#3fb950','#90dd98'], unit: '' },
-  new_listings:      { label: 'New Listings',        fmt: v => v.toLocaleString(undefined,{maximumFractionDigits:0}), colors: ['#3a2000','#7a4400','#b86800','#d29922','#f0cc6e'], unit: '' },
-  pct_above_list:    { label: '% Sold Above List',   fmt: v => (v*100).toFixed(1)+'%',       colors: ['#2a0a40','#521680','#7c30b8','#bc8cff','#ddc4ff'], unit: '' },
-  median_list_price: { label: 'Median List Price',   fmt: v => '$' + fmt(Math.round(v)),      colors: ['#001f3a','#003c70','#0060b0','#79c0ff','#c0e4ff'], unit: '' },
-  rent_index:        { label: 'Rent Index (ZORI)',   fmt: v => '$' + fmt(Math.round(v)),      colors: ['#3a0008','#780010','#b80020','#f85149','#ffaa99'], unit: '' },
+  median_price:      { label: 'Median Home Price',   fmt: v => '$' + fmt(Math.round(v)) },
+  inventory:         { label: 'Active Inventory',    fmt: v => v.toLocaleString(undefined,{maximumFractionDigits:0}) },
+  new_listings:      { label: 'New Listings',        fmt: v => v.toLocaleString(undefined,{maximumFractionDigits:0}) },
+  pct_above_list:    { label: '% Sold Above List',   fmt: v => (v*100).toFixed(1)+'%' },
+  median_list_price: { label: 'Median List Price',   fmt: v => '$' + fmt(Math.round(v)) },
+  rent_index:        { label: 'Rent Index (ZORI)',   fmt: v => '$' + fmt(Math.round(v)) },
 };
+
+// Compute polygon centroid (average of all ring coordinates)
+function centroid(feature) {
+  const coords = feature.geometry.type === 'Polygon'
+    ? feature.geometry.coordinates[0]
+    : feature.geometry.coordinates[0][0];
+  let lat = 0, lng = 0;
+  coords.forEach(([lo, la]) => { lng += lo; lat += la; });
+  return [lat / coords.length, lng / coords.length];
+}
+
+// Scatter N points randomly within a rough bounding box of a polygon
+function scatterPoints(feature, n) {
+  const coords = feature.geometry.type === 'Polygon'
+    ? feature.geometry.coordinates[0]
+    : feature.geometry.coordinates.flatMap(r => r[0]);
+  const lats = coords.map(c => c[1]), lngs = coords.map(c => c[0]);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  const pts = [];
+  // Use grid-ish scatter for reproducible spread
+  const side = Math.ceil(Math.sqrt(n));
+  for (let i = 0; i < side; i++) {
+    for (let j = 0; j < side; j++) {
+      const jitter = () => (Math.random() - 0.5) * 0.01;
+      pts.push([
+        minLat + (maxLat - minLat) * (i + 0.5 + jitter()) / side,
+        minLng + (maxLng - minLng) * (j + 0.5 + jitter()) / side,
+      ]);
+    }
+  }
+  return pts.slice(0, n);
+}
 
 // Build lookup: county name → all metric values
 function buildCountyLookup() {
   const lookup = {};
-  // ZHVI county data
   if (countyData) {
     countyData.counties.forEach(c => {
       const name = c.county.replace(' County','').trim();
@@ -576,7 +612,6 @@ function buildCountyLookup() {
       lookup[name].latest_date  = c.latest_date;
     });
   }
-  // Market activity data
   if (marketData) {
     marketData.counties.forEach(c => {
       const name = c.county.replace(' County','').trim();
@@ -593,20 +628,13 @@ function buildCountyLookup() {
   return lookup;
 }
 
-function quantileColor(val, vals, colors) {
-  const sorted = [...vals].filter(v => v != null).sort((a,b) => a-b);
-  if (!sorted.length || val == null) return '#30363d';
-  const pct = sorted.filter(v => v <= val).length / sorted.length;
-  const idx = Math.min(Math.floor(pct * colors.length), colors.length - 1);
-  return colors[idx];
-}
+let heatLayer = null, borderLayer = null;
 
 function initMap() {
-  if (mapInstance) return; // already initialized
+  if (mapInstance) return;
   mapInstance = L.map('map', { zoomControl: true, scrollWheelZoom: false })
     .setView([42.15, -71.55], 8);
 
-  // Dark-friendly tile layer
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
     subdomains: 'abcd', maxZoom: 19
@@ -617,36 +645,57 @@ function initMap() {
 
 function renderMapLayer(layerKey) {
   if (!mapInstance || !geoData) return;
-  const cfg = LAYER_CFG[layerKey];
+  const cfg    = LAYER_CFG[layerKey];
   const lookup = buildCountyLookup();
 
-  // Get all values for this layer to compute quantile breaks
   const allVals = Object.values(lookup).map(d => d[layerKey]).filter(v => v != null);
   const minVal  = Math.min(...allVals), maxVal = Math.max(...allVals);
+  const range   = maxVal - minVal || 1;
 
-  // Remove old layer
-  if (geoLayer) mapInstance.removeLayer(geoLayer);
+  // Remove old layers
+  if (heatLayer)   { mapInstance.removeLayer(heatLayer);   heatLayer = null; }
+  if (borderLayer) { mapInstance.removeLayer(borderLayer); borderLayer = null; }
 
-  geoLayer = L.geoJSON(geoData, {
-    style: feature => {
-      const name = feature.properties.NAME;
-      const val  = lookup[name]?.[layerKey];
-      return {
-        fillColor:   quantileColor(val, allVals, cfg.colors),
-        fillOpacity: 0.82,
-        color:       '#0d1117',
-        weight:      1.5,
-      };
+  // Build heat points: scatter multiple points per county weighted by intensity
+  const heatPts = [];
+  geoData.features.forEach(feature => {
+    const name = feature.properties.NAME;
+    const val  = lookup[name]?.[layerKey];
+    if (val == null) return;
+    const intensity = (val - minVal) / range;   // 0–1
+    const nPts = Math.max(6, Math.round(intensity * 20)); // 6–26 pts per county
+    scatterPoints(feature, nPts).forEach(([lat, lng]) => {
+      heatPts.push([lat, lng, intensity]);
+    });
+  });
+
+  heatLayer = L.heatLayer(heatPts, {
+    radius:  55,
+    blur:    45,
+    maxZoom: 10,
+    max:     1.0,
+    gradient: { 0.0: '#0d1117', 0.25: '#1a3a6e', 0.5: '#d29922', 0.75: '#f85149', 1.0: '#ff9999' },
+  }).addTo(mapInstance);
+
+  // County borders + invisible click targets on top of heat
+  borderLayer = L.geoJSON(geoData, {
+    style: {
+      fillColor:   'transparent',
+      fillOpacity: 0,
+      color:       'rgba(255,255,255,0.18)',
+      weight:      1.2,
     },
     onEachFeature: (feature, layer) => {
       const name = feature.properties.NAME;
       const d    = lookup[name] || {};
 
-      layer.on('mouseover', e => {
-        e.target.setStyle({ weight: 3, color: '#58a6ff' });
-        e.target.bringToFront();
+      // Invisible thick hit area
+      const hitLayer = L.geoJSON(feature, {
+        style: { fillColor: 'transparent', fillOpacity: 0.001, color: 'transparent', weight: 0 }
       });
-      layer.on('mouseout', e => geoLayer.resetStyle(e.target));
+
+      layer.on('mouseover', e => e.target.setStyle({ color: 'rgba(88,166,255,0.9)', weight: 2 }));
+      layer.on('mouseout',  e => e.target.setStyle({ color: 'rgba(255,255,255,0.18)', weight: 1.2 }));
       layer.on('click', () => {
         const rows = [
           ['Median Home Price',  d.median_price      != null ? '$'+fmt(Math.round(d.median_price))  : '--'],
@@ -656,10 +705,9 @@ function renderMapLayer(layerKey) {
           ['% Sold Above List',  d.pct_above_list    != null ? (d.pct_above_list*100).toFixed(1)+'%' : '--'],
           ['Median List Price',  d.median_list_price != null ? '$'+fmt(Math.round(d.median_list_price)) : '--'],
           ['Rent Index (ZORI)',  d.rent_index        != null ? '$'+fmt(Math.round(d.rent_index)) : '--'],
-        ].map(([label,val]) =>
-          `<div class="map-popup-row"><span class="map-popup-label">${label}</span><span class="map-popup-val">${val}</span></div>`
+        ].map(([lbl,val]) =>
+          `<div class="map-popup-row"><span class="map-popup-label">${lbl}</span><span class="map-popup-val">${val}</span></div>`
         ).join('');
-
         layer.bindPopup(
           `<div class="map-popup-title">${name} County</div>${rows}`,
           { maxWidth: 280 }
@@ -668,7 +716,26 @@ function renderMapLayer(layerKey) {
     }
   }).addTo(mapInstance);
 
-  // Update legend
+  // County name labels
+  geoData.features.forEach(feature => {
+    const [lat, lng] = centroid(feature);
+    const name = feature.properties.NAME;
+    const val  = lookup[name]?.[layerKey];
+    const display = val != null ? `<div style="font-size:10px;color:rgba(230,237,243,0.7)">${cfg.fmt(val)}</div>` : '';
+    L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: '',
+        html: `<div style="text-align:center;pointer-events:none;white-space:nowrap;">
+                 <div style="font-size:11px;font-weight:700;color:#e6edf3;text-shadow:0 1px 3px #000">${name}</div>
+                 ${display}
+               </div>`,
+        iconAnchor: [40, 16],
+        iconSize:   [80, 32],
+      }),
+      interactive: false
+    }).addTo(mapInstance);
+  });
+
   updateLegend(cfg, minVal, maxVal);
 }
 
@@ -678,7 +745,10 @@ function updateLegend(cfg, minVal, maxVal) {
   const canvas = document.getElementById('legend-bar');
   const ctx    = canvas.getContext('2d');
   const grad   = ctx.createLinearGradient(0, 0, 120, 0);
-  cfg.colors.forEach((c, i) => grad.addColorStop(i / (cfg.colors.length - 1), c));
+  grad.addColorStop(0,    '#1a3a6e');
+  grad.addColorStop(0.45, '#d29922');
+  grad.addColorStop(0.75, '#f85149');
+  grad.addColorStop(1,    '#ff9999');
   ctx.clearRect(0, 0, 120, 10);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 120, 10);
@@ -686,6 +756,8 @@ function updateLegend(cfg, minVal, maxVal) {
 
 function setLayer(key) {
   activeLayer = key;
+  // Remove old labels before re-rendering
+  if (mapInstance) mapInstance.eachLayer(l => { if (l instanceof L.Marker) mapInstance.removeLayer(l); });
   document.querySelectorAll('.layer-btn').forEach(b =>
     b.classList.toggle('active', b.getAttribute('onclick').includes(`'${key}'`))
   );
