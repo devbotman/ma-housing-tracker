@@ -671,33 +671,36 @@ function renderMapLayer(layerKey) {
   const cfg    = LAYER_CFG[layerKey];
   const lookup = buildCountyLookup();
 
-  const allVals = Object.values(lookup).map(d => d[layerKey]).filter(v => v != null);
-  const minVal  = Math.min(...allVals), maxVal = Math.max(...allVals);
-  const range   = maxVal - minVal || 1;
+  const allVals = Object.values(lookup).map(d => d[layerKey]).filter(v => v != null).sort((a,b) => a-b);
+  const minVal  = allVals[0];
+  // Cap scale at 85th percentile so outliers (Nantucket) don't crush the rest
+  const p85     = allVals[Math.floor(allVals.length * 0.85)] ?? allVals[allVals.length - 1];
+  const range   = p85 - minVal || 1;
 
   // Remove old layers
   if (heatLayer)   { mapInstance.removeLayer(heatLayer);   heatLayer = null; }
   if (borderLayer) { mapInstance.removeLayer(borderLayer); borderLayer = null; }
+  mapInstance.eachLayer(l => { if (l instanceof L.Marker) mapInstance.removeLayer(l); });
 
-  // Build heat points: scatter multiple points per county weighted by intensity
+  // Fixed point count per county (12) — intensity only drives color, not density
   const heatPts = [];
   geoData.features.forEach(feature => {
     const name = feature.properties.NAME;
     const val  = lookup[name]?.[layerKey];
     if (val == null) return;
-    const intensity = (val - minVal) / range;   // 0–1
-    const nPts = Math.max(6, Math.round(intensity * 20)); // 6–26 pts per county
-    scatterPoints(feature, nPts).forEach(([lat, lng]) => {
+    const intensity = Math.min((val - minVal) / range, 1.0); // clamp outliers to 1
+    scatterPoints(feature, 12).forEach(([lat, lng]) => {
       heatPts.push([lat, lng, intensity]);
     });
   });
 
   heatLayer = L.heatLayer(heatPts, {
-    radius:  55,
-    blur:    45,
+    radius:  52,
+    blur:    38,
     maxZoom: 10,
     max:     1.0,
-    gradient: { 0.0: '#0d1117', 0.25: '#1a3a6e', 0.5: '#d29922', 0.75: '#f85149', 1.0: '#ff9999' },
+    // Gradient visible at all levels — starts at blue (not black) so low-value counties show up
+    gradient: { 0.0: '#1a3a6e', 0.35: '#2176c8', 0.6: '#d29922', 0.82: '#f85149', 1.0: '#ffcccc' },
   }).addTo(mapInstance);
 
   // County borders + invisible click targets on top of heat
@@ -759,19 +762,24 @@ function renderMapLayer(layerKey) {
     }).addTo(mapInstance);
   });
 
-  updateLegend(cfg, minVal, maxVal);
+  updateLegend(cfg, minVal, p85, allVals[allVals.length - 1]);
 }
 
-function updateLegend(cfg, minVal, maxVal) {
+function updateLegend(cfg, minVal, scaleMax, trueMax) {
   document.getElementById('legend-lo').textContent = cfg.fmt(minVal);
-  document.getElementById('legend-hi').textContent = cfg.fmt(maxVal);
+  // Show p85 on scale; if true max is higher, note it
+  const hiLabel = trueMax > scaleMax
+    ? cfg.fmt(scaleMax) + '+'
+    : cfg.fmt(scaleMax);
+  document.getElementById('legend-hi').textContent = hiLabel;
   const canvas = document.getElementById('legend-bar');
   const ctx    = canvas.getContext('2d');
   const grad   = ctx.createLinearGradient(0, 0, 120, 0);
   grad.addColorStop(0,    '#1a3a6e');
-  grad.addColorStop(0.45, '#d29922');
-  grad.addColorStop(0.75, '#f85149');
-  grad.addColorStop(1,    '#ff9999');
+  grad.addColorStop(0.35, '#2176c8');
+  grad.addColorStop(0.6,  '#d29922');
+  grad.addColorStop(0.82, '#f85149');
+  grad.addColorStop(1,    '#ffcccc');
   ctx.clearRect(0, 0, 120, 10);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 120, 10);
@@ -806,9 +814,10 @@ function renderTownHeat(layerKey) {
   const cfg    = TOWN_LAYER_CFG[layerKey];
   const lookup = buildTownLookup();
 
-  const allVals = Object.values(lookup).map(d => d[layerKey]).filter(v => v != null);
-  const minVal  = Math.min(...allVals), maxVal = Math.max(...allVals);
-  const range   = maxVal - minVal || 1;
+  const allVals = Object.values(lookup).map(d => d[layerKey]).filter(v => v != null).sort((a,b) => a-b);
+  const minVal  = allVals[0];
+  const p90     = allVals[Math.floor(allVals.length * 0.90)] ?? allVals[allVals.length - 1];
+  const range   = p90 - minVal || 1;
 
   if (heatLayer)   { mapInstance.removeLayer(heatLayer);   heatLayer = null; }
   if (borderLayer) { mapInstance.removeLayer(borderLayer); borderLayer = null; }
@@ -820,8 +829,8 @@ function renderTownHeat(layerKey) {
     const d    = lookup[name];
     const val  = d?.[layerKey];
     if (val == null) return;
-    const intensity = (val - minVal) / range;
-    const nPts = Math.max(4, Math.round(intensity * 14));
+    const intensity = Math.min((val - minVal) / range, 1.0);
+    const nPts = 8; // fixed count — intensity drives color, not density
     scatterPoints(feature, nPts).forEach(([lat, lng]) => {
       heatPts.push([lat, lng, intensity]);
     });
@@ -859,9 +868,9 @@ function renderTownHeat(layerKey) {
   }).addTo(mapInstance);
 
   // Update legend
-  const lo = cfg.fmt(minVal), hi = cfg.fmt(maxVal);
-  document.getElementById('legend-town-lo').textContent = lo;
-  document.getElementById('legend-town-hi').textContent = hi;
+  const trueMax = allVals[allVals.length - 1];
+  document.getElementById('legend-town-lo').textContent = cfg.fmt(minVal);
+  document.getElementById('legend-town-hi').textContent = trueMax > p90 ? cfg.fmt(p90) + '+' : cfg.fmt(p90);
   const canvas = document.getElementById('legend-town-bar');
   const ctx = canvas.getContext('2d');
   const stops = layerKey === 'yoy_change'
